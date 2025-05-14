@@ -16,9 +16,8 @@ def main():
     '''
     Load DAS data
     '''
-    filelist = glob('/1-fnp/petasaur/p-jbod1/das4orcas/incoming/decimator_2024-11-09_21.4*.h5')
+    filelist = glob('/1-fnp/petasaur/p-jbod1/das4orcas/incoming/decimator_2024-11-0*.h5')
     filelist.sort()
-    # filelist=filelist[0:2]
 
     ''' Serial version'''
     # for file in filelist:
@@ -28,7 +27,7 @@ def main():
     # Build argument tuples
     args_list = [(file, template) for file in filelist]
 
-    with multiprocessing.Pool() as pool:
+    with multiprocessing.Pool(processes=24) as pool:
         pool.map(xc_workflow_wrapper, args_list)
 
 def xc_workflow_wrapper(args):
@@ -39,7 +38,12 @@ def xc_workflow(file,template):
     '''
     Load DAS data and correlate with template
     '''
-    data = h5py.File(file, locking=False, mode='r')
+    # data = h5py.File(file, locking=False, mode='r')
+    try:
+        data = h5py.File(file, locking=False, mode='r')
+    except Exception as e:
+        print(f"Error opening file: {e}")
+        return None
 
     attrs = dict(data['Acquisition'].attrs)
     dt = 1 / attrs['MaximumFrequency'] / 2
@@ -61,12 +65,14 @@ def xc_workflow(file,template):
     Correlate template waveform over each channel of the DAS data
     '''
     xc = window_and_correlate(template,das)
+    max_xc = np.max(xc, axis=1)
 
     '''
     Save output as npz
     '''
+    path = '/data/fast1/orcas/'
     savename = os.path.splitext(os.path.basename(file))[0]
-    np.savez(f'{savename}_xcorr.npz', xc=xc, time=time, x=x, dt=dt, dx=dx)
+    np.savez(f'{path}{savename}_xcorr.npz', xc=max_xc, time=time, x=x, dt=dt, dx=dx)
 
 
 def correlate(s1,s2,mode="same",verbose=False):
